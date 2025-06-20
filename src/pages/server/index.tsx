@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react";
-import { ServerSkeleton } from "@/components/server";
+import { ServerSkeleton } from "@/components/server/skeleton";
 
 const ServerDataWrapper = lazy(() => import("@/components/server/detail-wrapper"));
 

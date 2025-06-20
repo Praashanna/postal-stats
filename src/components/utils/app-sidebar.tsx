@@ -7,7 +7,7 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
 } from "@/components/ui/sidebar";
-import { List } from "@/components/server";
+import { List } from "@/components/server/list";
 import { Button } from "@/components/ui/button";
 import { ServerFormModal } from "@/components/server/form-modal";
 import { useAuth } from "@/contexts/auth-context";
