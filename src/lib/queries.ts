@@ -5,8 +5,13 @@ import {
   BouncedEmailsData, 
   BouncedDomain, 
   BouncedEmail, 
+  BounceErrorType,
+  BounceErrorTypeSuppressionResult,
   PaginatedResponse, 
-  TimePeriod
+  SuppressionDuration,
+  TimePeriod,
+  SuppressionDeleteResult,
+  SuppressionsResponse,
 } from "@/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
@@ -74,6 +79,7 @@ export const queryKeys = {
     all: () => ['servers'] as const,
     detail: (id: string) => ['servers', id] as const,
     stats: (id: string, period: TimePeriod) => ['servers', id, 'stats', period] as const,
+    statsAll: (id: string) => ['servers', id, 'stats'] as const,
   },
   bounces: {
     data: (serverId: string, period: TimePeriod) => ['bounces', serverId, period] as const,
@@ -81,6 +87,13 @@ export const queryKeys = {
       ['bounces', serverId, period, 'domains', page, limit, search] as const,
     emails: (serverId: string, period: TimePeriod, page: number, limit: number, search?: string) => 
       ['bounces', serverId, period, 'emails', page, limit, search] as const,
+    errorTypes: (serverId: string, period: TimePeriod, page: number, limit: number, search?: string) =>
+      ['bounces', serverId, period, 'error-types', page, limit, search] as const,
+  },
+  suppressions: {
+    all: (serverId: string) => ['suppressions', serverId] as const,
+    list: (serverId: string, page: number, perPage: number, search?: string, domain?: string) => 
+      ['suppressions', serverId, page, perPage, search, domain] as const,
   },
   opens: {
     data: (serverId: string, period: TimePeriod) => ['opens', serverId, period] as const,
@@ -147,6 +160,7 @@ const apiClient = {
         totalBounced: number;
         totalHeld: number;
         totalOpened: number;
+        suppressionCount: number;
         deliveryRate: number;
         bounceRate: number;
         openRate: number;
@@ -164,6 +178,7 @@ const apiClient = {
       total_sent: response.totalSent,
       total_bounces: response.totalBounced,
       total_opens: response.totalOpened,
+      suppressionCount: response.suppressionCount ?? 0,
       timeSeriesData: response.chartData.map(item => ({
         date: item.date,
         sent: item.sent,
@@ -171,7 +186,7 @@ const apiClient = {
         opens: item.opens
       })),
       server: {
-        id: serverId,
+        id: Number(serverId),
         name: "Server",
         status: "active"
       }
@@ -283,6 +298,93 @@ const apiClient = {
     };
   },
 
+  getBounceErrorTypes: async (
+    serverId: string,
+    period: TimePeriod,
+    page: number = 1,
+    limit: number = 15,
+    search: string = ""
+  ): Promise<PaginatedResponse<BounceErrorType[]>> => {
+    const searchParam = search ? `&q=${encodeURIComponent(search)}` : '';
+    const response = await apiRequestData<{
+      data: Array<{
+        error_type: string;
+        bounce_count: number;
+        unique_messages: number;
+        last_delivery: string;
+      }>;
+      pagination: {
+        current_page: number;
+        last_page: number;
+        per_page: number;
+        total: number;
+      };
+    }>(`/stats/server/${serverId}/bounces/error-type?period=${period}&page=${page}&per_page=${limit}${searchParam}`);
+
+    return {
+      data: response.data.map(item => ({
+        errorType: item.error_type,
+        bounceCount: item.bounce_count,
+        uniqueMessages: item.unique_messages,
+        lastDelivery: item.last_delivery
+      })),
+      total: response.pagination.total,
+      page: response.pagination.current_page,
+      limit: response.pagination.per_page,
+      totalPages: response.pagination.last_page
+    };
+  },
+
+  exportBounceErrorTypeAddresses: async (
+    serverId: string,
+    errorType: string,
+    period: TimePeriod
+  ): Promise<void> => {
+    const response = await fetch(
+      `${API_BASE_URL}/export/server/${serverId}/bounces/error-type?error_type=${encodeURIComponent(errorType)}&period=${period}`,
+      {
+        headers: {
+          Accept: 'text/csv',
+          Authorization: `Bearer ${getAuthToken()}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new ApiError(errorData.message || "Export failed", response.status);
+    }
+
+    const contentDisposition = response.headers.get("Content-Disposition");
+    const filename = contentDisposition?.match(/filename="?([^"]+)"?/)?.[1] ?? `bounces-${serverId}-${errorType}-${period}.csv`;
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  suppressBounceErrorTypeAddresses: async (
+    serverId: string,
+    payload: {
+      error_type: string;
+      duration: SuppressionDuration;
+      period: TimePeriod;
+    },
+  ): Promise<BounceErrorTypeSuppressionResult> => {
+    return apiRequestData<BounceErrorTypeSuppressionResult>(
+      `/stats/server/${serverId}/bounces/error-type/suppressions`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+  },
+
   exportBouncedEmails: async (serverId: string, period: TimePeriod): Promise<void> => {
     const response = await fetch(
       `${API_BASE_URL}/export/server/${serverId}/bounces/?period=${period}`,
@@ -328,68 +430,41 @@ const apiClient = {
       }>;
     }>(`/servers/${serverId}/opens?period=${period}`);
   },
+
+  getSuppressions: async (
+    serverId: string,
+    page: number = 1,
+    perPage: number = 15,
+    search: string = "",
+    domain: string = "",
+  ): Promise<SuppressionsResponse> => {
+    const searchParam = search ? `&q=${encodeURIComponent(search)}` : "";
+    const domainParam = domain ? `&domain=${encodeURIComponent(domain)}` : "";
+
+    return apiRequestData<SuppressionsResponse>(
+      `/stats/server/${serverId}/suppressions?page=${page}&per_page=${perPage}${searchParam}${domainParam}`
+    );
+  },
+
+  deleteSuppressions: async (
+    serverId: string,
+    payload: {
+      scope: "all" | "domain" | "preset" | "address";
+      domain?: string;
+      domains?: string[];
+      preset?: "google" | "microsoft" | "yahoo";
+      address?: string;
+    },
+  ): Promise<SuppressionDeleteResult> => {
+    return apiRequestData<SuppressionDeleteResult>(`/stats/server/${serverId}/suppressions`, {
+      method: "DELETE",
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
 const serverManagement = {
-  createServer: async (serverData: {
-    name: string;
-    host: string;
-    port: number;
-    database: string;
-    username: string;
-    password?: string;
-    is_active?: boolean;
-  }) => {
-    return apiRequest<{
-      status: string;
-      message: string;
-      data: ServerListItem;
-    }>('/servers', {
-      method: 'POST',
-      body: JSON.stringify(serverData),
-    });
-  },
-
-  updateServer: async (id: string, serverData: Partial<{
-    name: string;
-    host: string;
-    port: number;
-    database: string;
-    username: string;
-    password: string;
-    is_active: boolean;
-  }>) => {
-    return apiRequest<{
-      status: string;
-      message: string;
-      data: ServerListItem;
-    }>(`/servers/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(serverData),
-    });
-  },
-
-  deleteServer: async (id: string) => {
-    return apiRequest<{
-      status: string;
-      message: string;
-      data: null;
-    }>(`/servers/${id}`, {
-      method: 'DELETE',
-    });
-  },
-
-  toggleServerStatus: async (id: string) => {
-    return apiRequest<{
-      status: string;
-      message: string;
-      data: ServerListItem;
-    }>(`/servers/${id}/toggle-status`, {
-      method: 'PATCH',
-    });
-  },
-
-  testConnection: async (id: string) => {
+  testConnection: async (id: string | number) => {
     return apiRequest<{
       status: string;
       message: string;
@@ -496,6 +571,55 @@ export const useBouncedEmails = (
   });
 };
 
+export const useBounceErrorTypes = (
+  serverId: string,
+  period: TimePeriod,
+  page: number = 1,
+  limit: number = 15,
+  search: string = ""
+) => {
+  return useQuery({
+    queryKey: queryKeys.bounces.errorTypes(serverId, period, page, limit, search),
+    queryFn: () => apiClient.getBounceErrorTypes(serverId, period, page, limit, search),
+    enabled: !!serverId,
+    placeholderData: (previousData) => previousData,
+  });
+};
+
+export const useExportBounceErrorTypeAddresses = () => {
+  return useMutation({
+    mutationFn: ({ serverId, errorType, period }: { serverId: string; errorType: string; period: TimePeriod }) =>
+      apiClient.exportBounceErrorTypeAddresses(serverId, errorType, period),
+  });
+};
+
+export const useSuppressBounceErrorTypeAddresses = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      serverId,
+      errorType,
+      duration,
+      period,
+    }: {
+      serverId: string;
+      errorType: string;
+      duration: SuppressionDuration;
+      period: TimePeriod;
+    }) =>
+      apiClient.suppressBounceErrorTypeAddresses(serverId, {
+        error_type: errorType,
+        duration,
+        period,
+      }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppressions.all(variables.serverId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.servers.statsAll(variables.serverId) });
+    },
+  });
+};
+
 export const useExportBouncedEmails = () => {
   return useMutation({
     mutationFn: ({ serverId, period }: { serverId: string; period: TimePeriod }) =>
@@ -511,47 +635,30 @@ export const useOpensData = (serverId: string, period: TimePeriod) => {
   });
 };
 
-export const useCreateServer = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: serverManagement.createServer,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.servers.all() });
-    },
+export const useSuppressions = (
+  serverId: string,
+  page: number = 1,
+  perPage: number = 15,
+  search: string = "",
+  domain: string = "",
+) => {
+  return useQuery({
+    queryKey: queryKeys.suppressions.list(serverId, page, perPage, search, domain),
+    queryFn: () => apiClient.getSuppressions(serverId, page, perPage, search, domain),
+    enabled: !!serverId,
+    placeholderData: (previousData) => previousData,
   });
 };
 
-export const useUpdateServer = () => {
+export const useDeleteSuppressions = () => {
   const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof serverManagement.updateServer>[1] }) =>
-      serverManagement.updateServer(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.servers.all() });
-    },
-  });
-};
 
-export const useDeleteServer = () => {
-  const queryClient = useQueryClient();
-  
   return useMutation({
-    mutationFn: serverManagement.deleteServer,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.servers.all() });
-    },
-  });
-};
-
-export const useToggleServerStatus = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: serverManagement.toggleServerStatus,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.servers.all() });
+    mutationFn: ({ serverId, payload }: { serverId: string; payload: Parameters<typeof apiClient.deleteSuppressions>[1] }) =>
+      apiClient.deleteSuppressions(serverId, payload),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppressions.all(variables.serverId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.servers.statsAll(variables.serverId) });
     },
   });
 };

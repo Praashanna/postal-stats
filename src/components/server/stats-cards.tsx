@@ -1,4 +1,4 @@
-import { MailIcon, XCircleIcon, CheckCircle2Icon } from "lucide-react";
+import { MailIcon, XCircleIcon, CheckCircle2Icon, ShieldAlertIcon } from "lucide-react";
 import { StatsCard } from "@/components/ui/stats-card";
 import { ServerData, TimePeriod } from "@/types";
 import { getPeriodLabel } from "@/lib/period-utils";
@@ -14,7 +14,7 @@ export function StatsCards({ data, period, serverId }: StatsCardsProps) {
   const periodLabel = getPeriodLabel(period).toLowerCase();
   
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-4">
       <StatsCard
         title="Total Sent"
         value={data.total_sent}
@@ -29,10 +29,18 @@ export function StatsCards({ data, period, serverId }: StatsCardsProps) {
           description={`in ${periodLabel}`}
         />
       </Link>
+      <Link to={`/server/${serverId}/suppressions`}>
         <StatsCard
-          title="Total Opens"
-          value={data.total_opens}
-          icon={<CheckCircle2Icon className="h-4 w-4" />}
+          title="Suppressions"
+          value={data.suppressionCount ?? 0}
+          icon={<ShieldAlertIcon className="h-4 w-4" />}
+          description="recipient rows"
+        />
+      </Link>
+      <StatsCard
+        title="Total Opens"
+        value={data.total_opens}
+        icon={<CheckCircle2Icon className="h-4 w-4" />}
         description={`in ${periodLabel}`}
       />
     </div>

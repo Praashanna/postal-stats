@@ -9,19 +9,16 @@ import {
 } from "@/components/ui/sidebar";
 import { List } from "@/components/server/list";
 import { Button } from "@/components/ui/button";
-import { ServerFormModal } from "@/components/server/form-modal";
 import { useAuth } from "@/contexts/auth-context";
 import { useTheme } from "@/contexts/theme-context";
 import { useNavigate } from "react-router-dom";
-import { MailOpen, LogOut, Moon, Sun, Plus } from "lucide-react";
+import { MailOpen, LogOut, Moon, Sun } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useState } from "react";
 
 export function AppSidebar() {
   const { logout, user } = useAuth();
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
-  const [showAddModal, setShowAddModal] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -38,18 +35,7 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <div className="flex items-center justify-between">
-            <SidebarGroupLabel>Servers</SidebarGroupLabel>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => setShowAddModal(true)}
-              title="Add new server"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
+          <SidebarGroupLabel>Servers</SidebarGroupLabel>
           <SidebarGroupContent>
             <List />
           </SidebarGroupContent>
@@ -94,12 +80,6 @@ export function AppSidebar() {
           </Button>
         </div>
       </SidebarFooter>
-      
-      <ServerFormModal
-        open={showAddModal}
-        onOpenChange={setShowAddModal}
-        mode="create"
-      />
     </Sidebar>
   );
 }

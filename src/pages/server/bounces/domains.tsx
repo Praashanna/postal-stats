@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { MailIcon, UsersIcon, AtSignIcon } from "lucide-react";
+import { MailIcon, UsersIcon, AtSignIcon, ShieldAlertIcon, MessageSquareWarningIcon } from "lucide-react";
 import {
   Pagination,
   PaginationContent,
@@ -144,7 +144,7 @@ export function BouncedDomainsPage() {
         </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" asChild>
           <Link to={`/server/${serverId}/bounces`}>
             <MailIcon className="h-4 w-4 mr-2" />
@@ -159,6 +159,18 @@ export function BouncedDomainsPage() {
           <Link to={`/server/${serverId}/bounces/email`}>
             <AtSignIcon className="h-4 w-4 mr-2" />
             Bounced Emails
+          </Link>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <Link to={`/server/${serverId}/bounces/error-type`}>
+            <MessageSquareWarningIcon className="h-4 w-4 mr-2" />
+            Error Types
+          </Link>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <Link to={`/server/${serverId}/suppressions`}>
+            <ShieldAlertIcon className="h-4 w-4 mr-2" />
+            Suppressions
           </Link>
         </Button>
       </div>

@@ -8,6 +8,8 @@ const ServerDetailPage = lazy(() => import("@/pages/server").then(module => ({ d
 const BouncesOverviewPage = lazy(() => import("@/pages/server/bounces/overview").then(module => ({ default: module.BouncesOverviewPage })));
 const BouncedDomainsPage = lazy(() => import("@/pages/server/bounces/domains").then(module => ({ default: module.BouncedDomainsPage })));
 const BouncedEmailsIndividualPage = lazy(() => import("@/pages/server/bounces/emails").then(module => ({ default: module.BouncedEmailsPage })));
+const BounceErrorTypesPage = lazy(() => import("@/pages/server/bounces/error-types").then(module => ({ default: module.BounceErrorTypesPage })));
+const SuppressionsPage = lazy(() => import("@/pages/server/suppressions").then(module => ({ default: module.SuppressionsPage })));
 const ProtectedRoute = lazy(() => import("@/components/utils/protected-route").then(module => ({ default: module.ProtectedRoute })));
 
 const PageLoader = () => (
@@ -79,6 +81,22 @@ export const router = createBrowserRouter([
         element: (
           <Suspense fallback={<PageLoader />}>
             <BouncedEmailsIndividualPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: "server/:serverId/bounces/error-type",
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <BounceErrorTypesPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: "server/:serverId/suppressions",
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <SuppressionsPage />
           </Suspense>
         ),
       },
